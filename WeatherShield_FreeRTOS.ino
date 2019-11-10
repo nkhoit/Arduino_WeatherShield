@@ -16,7 +16,7 @@ static TEWeatherShield gWeatherShield;
 static float gTemperature[5] { 0, 0, 0, 0 , 0 };
 static float gEstimate = 0.0;
 static const char * kSensorString[5] = { "HTU21D", "MS5637", "MS8607", "TSD305", "TSY01" };
-static const float kVarianceInverse[5] = { 1 / 0.01, 1 / 0.01, 1 / 0.01, 1 / 0.01, 1 / 0.01 };
+static const float kVarianceInverse[5] = { 1 / 0.0185, 1 / 0.0151, 1 / 0.0156, 1 / 0.0256, 1 / 0.0164 };
 static float kVarianceInverseSum = 0.0;
 
 void setup() {
@@ -125,7 +125,7 @@ void TaskSensorRead(void *pvParameters)
         xSemaphoreGive(gSensorSemaphore);
   
         // half second delay
-        vTaskDelay( 100 / portTICK_PERIOD_MS );
+        vTaskDelay( 200 / portTICK_PERIOD_MS );
       }
     }
   }
@@ -144,10 +144,10 @@ void TaskEstimator(void *pvParameters)
 
         for (int i=0; i<5; i++)
         {
-          Serial.print(gTemperature[i]);
+          Serial.print(gTemperature[i], 6);
           Serial.print(", ");
         }
-        Serial.print(gEstimate);
+        Serial.print(gEstimate, 6);
         Serial.println();
       }
     }
