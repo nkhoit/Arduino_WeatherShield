@@ -7,6 +7,7 @@ void TaskEstimator(void *pvParameters);
 
 // Mutex lock for i2c bus
 SemaphoreHandle_t gSensorMtx = NULL;
+SemaphoreHandle_t gSensorSemaphore = NULL;
 
 // weatherShield object
 static TEWeatherShield gWeatherShield;
@@ -16,7 +17,7 @@ static float gTemperature[5] { 0, 0, 0, 0 , 0 };
 static float gEstimate = 0.0;
 static const char * kSensorString[5] = { "HTU21D", "MS5637", "MS8607", "TSD305", "TSY01" };
 static const float kVarianceInverse[5] = { 1 / 0.01, 1 / 0.01, 1 / 0.01, 1 / 0.01, 1 / 0.01 };
-static const float kVarianceInverseSum = 0.0;
+static float kVarianceInverseSum = 0.0;
 
 void setup() {
   // Initialize Serial bus
@@ -35,6 +36,7 @@ void setup() {
   }
 
   gSensorMtx = xSemaphoreCreateMutex();
+  gSensorSemaphore = xSemaphoreCreateBinary();
 
   xTaskCreate(
     TaskSensorRead,
@@ -119,9 +121,11 @@ void TaskSensorRead(void *pvParameters)
 
         // Release mutex
         xSemaphoreGive(gSensorMtx);
+        // Release Semaphore
+        xSemaphoreGive(gSensorSemaphore);
   
         // half second delay
-        vTaskDelay( 500 / portTICK_PERIOD_MS );
+        vTaskDelay( 100 / portTICK_PERIOD_MS );
       }
     }
   }
@@ -131,18 +135,21 @@ void TaskEstimator(void *pvParameters)
 {
   for(;;)
   {
-    for (int i=0; i<5; i++) {
-      gEstimate += kVarianceInverse[i] * gTemperature[i];
+    if (gSensorSemaphore != NULL) {
+      if (xSemaphoreTake(gSensorSemaphore, (TickType_t) 10) == pdTRUE) {
+        for (int i=0; i<5; i++) {
+          gEstimate += kVarianceInverse[i] * gTemperature[i];
+        }
+        gEstimate /= kVarianceInverseSum;
 
-      for (int i=0; i<5; i++)
-      {
-        Serial.print(gTemperature[i]);
-        Serial.print(", ");
+        for (int i=0; i<5; i++)
+        {
+          Serial.print(gTemperature[i]);
+          Serial.print(", ");
+        }
+        Serial.print(gEstimate);
+        Serial.println();
       }
-      Serial.print(gEstimate);
-      Serial.println();
-
-      vTaskDelay( 1000 / portTICK_PERIOD_MS );
     }
   }
 }
