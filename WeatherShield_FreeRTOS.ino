@@ -7,6 +7,7 @@ void TaskMS5637(void *pvParameters);
 void TaskMS8607(void *pvParameters);
 void TaskTSD305(void *pvParameters);
 void TaskTSY01(void *pvParameters);
+void TaskPrint(void *pvParameters);
 
 // Mutex lock for i2c bus
 SemaphoreHandle_t gSensorMtx = NULL;
@@ -16,6 +17,10 @@ static TEWeatherShield gWeatherShield;
 
 // Order: HTU21D, MS5637, MS8607, TSD305, TSY01
 static float gTemperature[5];
+
+// Order: HTU21D, MS5637, MS8607, TSD305, TSY01
+static const int kTimeDelay[5] = { 20, 20, 20, 80, 15 };
+static const char * kSensorString[5] = { "HTU21D", "MS5637", "MS8607", "TSD305", "TSY01" };
 
 void setup() {
   // Initialize Serial bus
@@ -72,6 +77,15 @@ void setup() {
     1,
     NULL
   );
+
+  xTaskCreate(
+    TaskPrint,
+    (const portCHAR *) "Printer",
+    128,
+    NULL,
+    2,
+    NULL
+  );
 }
 
 void loop() {
@@ -99,6 +113,9 @@ void TaskHTU21D(void *pvParameters)
 
       // Release mutex
       xSemaphoreGive(gSensorMtx);
+
+      // Wait for ADC to settle before trying again
+      vTaskDelay( kTimeDelay[0] / portTICK_PERIOD_MS );
     }
   }
 }
@@ -123,6 +140,9 @@ void TaskMS5637(void *pvParameters)
 
       // Release mutex
       xSemaphoreGive(gSensorMtx);
+
+      // Wait for ADC to settle before trying again
+      vTaskDelay( kTimeDelay[1] / portTICK_PERIOD_MS ); // wait for one second
     }
   }
 }
@@ -144,7 +164,11 @@ void TaskMS8607(void *pvParameters)
         gTemperature[2] = temperature;
       }
 
+      // Release mutex
       xSemaphoreGive(gSensorMtx);
+
+      // Wait for ADC to settle before trying again
+      vTaskDelay( kTimeDelay[2] / portTICK_PERIOD_MS ); // wait for one second
     }
   }
 }
@@ -165,7 +189,11 @@ void TaskTSD305(void *pvParameters)
         gTemperature[3] = temperature;
       }
 
+      // Release mutex
       xSemaphoreGive(gSensorMtx);
+
+      // Wait for ADC to settle before trying again
+      vTaskDelay( kTimeDelay[3] / portTICK_PERIOD_MS ); // wait for one second
     }
   }
 }
@@ -186,7 +214,27 @@ void TaskTSY01(void *pvParameters)
         gTemperature[4] = temperature;
       }
 
+      // Release mutex
       xSemaphoreGive(gSensorMtx);
+
+      // Wait for ADC to settle before trying again
+      vTaskDelay( kTimeDelay[4] / portTICK_PERIOD_MS ); // wait for one second
     }
+  }
+}
+
+void TaskPrint(void *pvParameters)
+{
+  for (;;)
+  {
+      for (int i = 0; i < 5; i++) {
+        Serial.print("- ");
+        Serial.print(kSensorString[i]);
+        Serial.print(" : ");
+        Serial.print(gTemperature[i]);
+        Serial.print((char)176);
+        Serial.println("C");
+      }
+      vTaskDelay( 1000 / portTICK_PERIOD_MS ); // wait for one second
   }
 }
