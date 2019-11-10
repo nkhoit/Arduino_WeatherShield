@@ -3,7 +3,7 @@
 #include <semphr.h>
 
 void TaskSensorRead(void *pvParameters);
-void TaskPrinter(void *pvParameters);
+void TaskEstimator(void *pvParameters);
 
 // Mutex lock for i2c bus
 SemaphoreHandle_t gSensorMtx = NULL;
@@ -13,8 +13,10 @@ static TEWeatherShield gWeatherShield;
 
 // Order: HTU21D, MS5637, MS8607, TSD305, TSY01
 static float gTemperature[5] { 0, 0, 0, 0 , 0 };
-
+static float gEstimate = 0.0;
 static const char * kSensorString[5] = { "HTU21D", "MS5637", "MS8607", "TSD305", "TSY01" };
+static const float kVarianceInverse[5] = { 1 / 0.01, 1 / 0.01, 1 / 0.01, 1 / 0.01, 1 / 0.01 };
+static const float kVarianceInverseSum = 0.0;
 
 void setup() {
   // Initialize Serial bus
@@ -22,6 +24,11 @@ void setup() {
 
   // Initialize weather shield
   gWeatherShield.begin();
+
+  // Sum variance kVarianceInverse
+  for (int i=0; i<5; i++) {
+    kVarianceInverseSum += kVarianceInverse[i];
+  }
 
   while (!Serial) {
     // Going to wait here until we connect the serial terminal
@@ -37,13 +44,13 @@ void setup() {
     1,
     NULL
   );
-  
+
   xTaskCreate(
-    TaskPrinter,
-    (const portCHAR *) "HTU21D",
+    TaskEstimator,
+    (const portCHAR *) "Estimator",
     128,
     NULL,
-    3,
+    2,
     NULL
   );
 }
@@ -112,28 +119,30 @@ void TaskSensorRead(void *pvParameters)
 
         // Release mutex
         xSemaphoreGive(gSensorMtx);
-        
   
+        // half second delay
         vTaskDelay( 500 / portTICK_PERIOD_MS );
       }
     }
   }
 }
 
-void TaskPrinter(void *pvParameters)
+void TaskEstimator(void *pvParameters)
 {
   for(;;)
   {
-    for (int i=0; i<5; i++)
-    {
-      Serial.print("- ");
-      Serial.print(kSensorString[i]);
-      Serial.print(" : ");
-      Serial.print(gTemperature[i]);
-      Serial.println(" C");
-    }
-    Serial.println();
+    for (int i=0; i<5; i++) {
+      gEstimate += kVarianceInverse[i] * gTemperature[i];
 
-    vTaskDelay( 1000 / portTICK_PERIOD_MS );
+      for (int i=0; i<5; i++)
+      {
+        Serial.print(gTemperature[i]);
+        Serial.print(", ");
+      }
+      Serial.print(gEstimate);
+      Serial.println();
+
+      vTaskDelay( 1000 / portTICK_PERIOD_MS );
+    }
   }
 }
