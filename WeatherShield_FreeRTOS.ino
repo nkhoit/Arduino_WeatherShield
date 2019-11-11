@@ -123,9 +123,9 @@ void TaskSensorRead(void *pvParameters)
         xSemaphoreGive(gSensorMtx);
         // Release Semaphore
         xSemaphoreGive(gSensorSemaphore);
-  
+
         // half second delay
-        vTaskDelay( 200 / portTICK_PERIOD_MS );
+        vTaskDelay( 100 / portTICK_PERIOD_MS );
       }
     }
   }
@@ -133,6 +133,8 @@ void TaskSensorRead(void *pvParameters)
 
 void TaskEstimator(void *pvParameters)
 {
+  unsigned long ms_since_start = 0;
+  
   for(;;)
   {
     if (gSensorSemaphore != NULL) {
@@ -141,7 +143,12 @@ void TaskEstimator(void *pvParameters)
           gEstimate += kVarianceInverse[i] * gTemperature[i];
         }
         gEstimate /= kVarianceInverseSum;
+        TickType_t ticks = xTaskGetTickCount();
+        ms_since_start = 1000 * (unsigned long)ticks / configTICK_RATE_HZ;
 
+        Serial.print(ms_since_start);
+        Serial.print(", ");
+        
         for (int i=0; i<5; i++)
         {
           Serial.print(gTemperature[i], 6);
